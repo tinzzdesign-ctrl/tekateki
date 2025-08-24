@@ -1,0 +1,323 @@
+<!--
+File: game-teka-teki.html
+Deskripsi: Game teka-teki interaktif satu file HTML + CSS + JS.
+Fitur:
+- Intro overlay dengan tombol: "Tekan tombol di bawah untuk memulai game"
+- Beberapa teka-teki (multiple choice) dengan timer dan skor
+- Animasi transisi, efek suara sederhana (WebAudio), confetti saat menang
+- Responsive dan mudah dikustomisasi
+
+Cara pakai: Simpan sebagai .html lalu buka di browser.
+--><!doctype html>
+
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Game Teka-Teki Seru</title>
+  <style>
+    :root{
+      --bg:#0f1724;
+      --card:#0b1220;
+      --accent:#7c3aed;
+      --muted:#94a3b8;
+      --glass: rgba(255,255,255,0.03);
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0; font-family: Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+      background: radial-gradient(1200px 600px at 10% 20%, rgba(124,58,237,0.12), transparent),
+                  radial-gradient(900px 500px at 90% 80%, rgba(14,165,233,0.06), transparent),
+                  var(--bg);
+      color:#e6eef8; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+      display:flex; align-items:center; justify-content:center; padding:24px;
+    }
+    .container{width:100%;max-width:980px}/* Intro overlay */
+.intro{
+  width:100%; min-height:420px; background:linear-gradient(180deg,var(--glass), rgba(255,255,255,0.02));
+  border-radius:16px; padding:36px; box-shadow:0 10px 30px rgba(2,6,23,0.6); position:relative; overflow:hidden;
+  display:flex; flex-direction:column; gap:18px; align-items:flex-start;
+}
+.intro h1{margin:0;font-size:28px;letter-spacing:0.4px}
+.intro p{margin:0;color:var(--muted)}
+.start-btn{
+  margin-top:18px; padding:14px 18px; background:linear-gradient(90deg,var(--accent), #06b6d4); border-radius:12px; border:none;
+  color:white; font-weight:600; cursor:pointer; font-size:16px; box-shadow:0 6px 18px rgba(2,6,23,0.5);
+  transition:transform .15s ease, box-shadow .15s ease;
+}
+.start-btn:active{transform:translateY(2px)}
+
+/* Game area */
+.game{display:none; margin-top:18px}
+.card{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); padding:22px; border-radius:12px}
+.meta{display:flex;gap:12px;align-items:center; justify-content:space-between}
+.meta .left{display:flex;gap:12px;align-items:center}
+.badge{background:rgba(255,255,255,0.04); padding:6px 10px; border-radius:10px; font-size:14px}
+
+.question{font-size:20px;margin:14px 0 8px}
+.choices{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.choice{background:transparent;border:1px solid rgba(255,255,255,0.06);padding:12px;border-radius:10px;cursor:pointer;transition:transform .12s ease, background .12s ease;min-height:56px;display:flex;align-items:center}
+.choice:hover{transform:translateY(-4px)}
+.choice.correct{outline:3px solid rgba(34,197,94,0.14); background:linear-gradient(90deg, rgba(34,197,94,0.04), rgba(34,197,94,0.02))}
+.choice.wrong{outline:3px solid rgba(239,68,68,0.12); background:linear-gradient(90deg, rgba(239,68,68,0.03), rgba(239,68,68,0.01))}
+
+.footer{display:flex;justify-content:space-between;align-items:center;margin-top:12px}
+.next-btn{padding:10px 14px;border-radius:10px;border:none;background:rgba(255,255,255,0.04);cursor:pointer}
+
+/* Confetti canvas */
+canvas#confetti{position:fixed;left:0;top:0;pointer-events:none}
+
+/* Responsive */
+@media(max-width:620px){.choices{grid-template-columns:1fr}.intro{padding:20px}.question{font-size:18px}}
+
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="intro card" id="intro">
+      <h1>Selamat datang di — <span style="color:var(--accent)">Teka-Teki Seru</span> 🎲</h1>
+      <p>Siapkan otakmu! Akan ada beberapa teka-teki cepat dengan batas waktu. Tekan tombol di bawah untuk memulai game.</p><div style="display:flex;gap:12px;align-items:center;margin-top:8px">
+    <button class="start-btn" id="startBtn">Tekan tombol di bawah untuk memulai game</button>
+  </div>
+
+  <div style="margin-top:14px;color:var(--muted);font-size:13px">Kontrol: Pilih jawaban yang menurutmu benar. Setiap jawaban benar bernilai 1 poin.</div>
+
+  <!-- placeholder card that becomes the game -->
+  <div class="game" id="gameArea">
+    <div class="card" id="questionCard">
+      <div class="meta">
+        <div class="left">
+          <div class="badge">Soal <span id="qIndex">1</span>/<span id="qTotal">5</span></div>
+          <div class="badge">Skor: <span id="score">0</span></div>
+        </div>
+        <div class="right">
+          <div class="badge">Sisa waktu: <span id="timer">15</span>s</div>
+        </div>
+      </div>
+
+      <div class="question" id="questionText">Pertanyaan akan muncul di sini</div>
+      <div class="choices" id="choices"></div>
+
+      <div class="footer">
+        <div style="color:var(--muted);font-size:13px">Jangan ragu, jawab cepat!</div>
+        <div>
+          <button class="next-btn" id="nextBtn" disabled>Lanjutkan →</button>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:12px; color:var(--muted);font-size:13px">Versi demo: Soal dapat diedit di kode. Mau tambahan kategori atau tingkat kesulitan?</div>
+  </div>
+
+</div>
+
+  </div><canvas id="confetti"></canvas>
+
+  <script>
+    // Data soal (mudah untuk dikustomisasi)
+    const QUESTIONS = [
+      {q: 'Saya punya satu, kamu punya satu. Jika kita bertukar, kita tetap punya satu. Apakah itu?', choices: ['Hidung', 'Nama', 'Dompet', 'Kacamata'], answer:1},
+      {q: 'Apa yang selalu datang tetapi tak pernah tiba?', choices: ['Besok', 'Kereta', 'Jam', 'Mimpi'], answer:0},
+      {q: 'Semakin banyak kau ambil, semakin banyak yang kau tinggalkan. Apa itu?', choices: ['Uang', 'Jejak', 'Waktu', 'Penyesalan'], answer:1},
+      {q: 'Saya berjalan tanpa kaki, menangis tanpa mata. Siapakah saya?', choices: ['Awan', 'Batu', 'Sungai', 'Bunga'], answer:2},
+      {q: 'Apa yang bisa melompat lebih tinggi dari gedung?', choices: ['Kucing', 'Kelinci', 'Semua hal', 'Anjing'], answer:2}
+    ];
+
+    // State
+    let index = 0, score = 0, timer = null, timeLeft = 15, locked = false;
+
+    const startBtn = document.getElementById('startBtn');
+    const intro = document.getElementById('intro');
+    const gameArea = document.getElementById('gameArea');
+    const qIndexEl = document.getElementById('qIndex');
+    const qTotalEl = document.getElementById('qTotal');
+    const questionText = document.getElementById('questionText');
+    const choicesEl = document.getElementById('choices');
+    const scoreEl = document.getElementById('score');
+    const timerEl = document.getElementById('timer');
+    const nextBtn = document.getElementById('nextBtn');
+    const confettiCanvas = document.getElementById('confetti');
+
+    qTotalEl.textContent = QUESTIONS.length;
+
+    // Simple sound: short beep using WebAudio
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    function beep(freq=440, duration=0.08, vol=0.12){
+      const o = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      o.type = 'sine'; o.frequency.value = freq;
+      g.gain.value = vol;
+      o.connect(g); g.connect(audioCtx.destination);
+      o.start();
+      setTimeout(()=>{o.stop()}, duration*1000);
+    }
+
+    startBtn.addEventListener('click', ()=>{
+      // unlock audio on some browsers
+      if(audioCtx.state === 'suspended') audioCtx.resume();
+      // hide the introductory message and show game
+      gameArea.style.display = 'block';
+      startBtn.disabled = true;
+      startBtn.style.opacity = 0.7;
+      // small animation
+      intro.scrollIntoView({behavior:'smooth'});
+      setTimeout(()=>{
+        startGame();
+      },350);
+    });
+
+    function startGame(){
+      index = 0; score = 0; scoreEl.textContent = score;
+      renderQuestion();
+    }
+
+    function renderQuestion(){
+      locked = false; nextBtn.disabled = true;
+      const cur = QUESTIONS[index];
+      qIndexEl.textContent = index+1;
+      questionText.textContent = cur.q;
+      choicesEl.innerHTML = '';
+      cur.choices.forEach((c,i)=>{
+        const btn = document.createElement('button');
+        btn.className = 'choice';
+        btn.innerHTML = `<div style="flex:1">${c}</div>`;
+        btn.addEventListener('click', ()=> selectChoice(i, btn));
+        choicesEl.appendChild(btn);
+      });
+      // reset timer
+      resetTimer(15);
+    }
+
+    function selectChoice(i, el){
+      if(locked) return; locked = true;
+      const correct = (i === QUESTIONS[index].answer);
+      document.querySelectorAll('.choice').forEach((c,idx)=>{
+        c.style.pointerEvents='none';
+        if(idx === QUESTIONS[index].answer) c.classList.add('correct');
+        if(idx === i && idx !== QUESTIONS[index].answer) c.classList.add('wrong');
+      });
+
+      if(correct){ score++; scoreEl.textContent = score; beep(880,0.06,0.14); }
+      else { beep(160,0.12,0.14); }
+
+      // stop timer
+      clearInterval(timer);
+      nextBtn.disabled = false;
+
+      // If last question and correct -> celebration
+      if(index === QUESTIONS.length-1){
+        setTimeout(()=>{
+          showResult();
+        },700);
+      }
+    }
+
+    nextBtn.addEventListener('click', ()=>{
+      if(index < QUESTIONS.length-1){ index++; renderQuestion(); }
+      else { showResult(); }
+    });
+
+    function resetTimer(seconds){
+      timeLeft = seconds; timerEl.textContent = timeLeft; clearInterval(timer);
+      timer = setInterval(()=>{
+        timeLeft--;
+        timerEl.textContent = timeLeft;
+        if(timeLeft <= 0){
+          clearInterval(timer);
+          // auto-lock and mark wrong
+          document.querySelectorAll('.choice').forEach((c,idx)=>{
+            c.style.pointerEvents='none';
+            if(idx === QUESTIONS[index].answer) c.classList.add('correct');
+          });
+          locked = true; nextBtn.disabled = false; beep(150,0.2,0.14);
+        }
+      },1000);
+    }
+
+    // Result overlay
+    function showResult(){
+      // Create a simple result modal
+      const modal = document.createElement('div');
+      Object.assign(modal.style,{position:'fixed',left:0,top:0,width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(2,6,23,0.6)',zIndex:9999});
+      modal.innerHTML = `
+        <div style="background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); padding:28px; border-radius:14px; width:92%; max-width:520px; text-align:center; color: #eaf6ff;">
+          <h2 style="margin:0 0 8px">Hasilmu: ${score}/${QUESTIONS.length}</h2>
+          <p style="color:var(--muted); margin:0 0 18px">${getResultText(score)}</p>
+          <div style="display:flex;gap:10px;justify-content:center">
+            <button id="replay" style="padding:10px 14px;border-radius:10px;border:none;cursor:pointer">Main lagi</button>
+            <button id="share" style="padding:10px 14px;border-radius:10px;border:none;cursor:pointer;background:rgba(255,255,255,0.04)">Bagikan skor</button>
+          </div>
+        </div>`;
+      document.body.appendChild(modal);
+
+      // confetti if good score
+      if(score >= Math.ceil(QUESTIONS.length*0.6)) startConfetti();
+
+      document.getElementById('replay').addEventListener('click', ()=>{
+        stopConfetti(); document.body.removeChild(modal); startGame();
+      });
+      document.getElementById('share').addEventListener('click', ()=>{
+        const text = `Skorku di Teka-Teki Seru: ${score}/${QUESTIONS.length}! Mau coba?`;
+        if(navigator.share){ navigator.share({title:'Teka-Teki Seru', text}); }
+        else { navigator.clipboard.writeText(text).then(()=> alert('Skor disalin!')); }
+      });
+    }
+
+    function getResultText(score){
+      const pct = score/QUESTIONS.length;
+      if(pct === 1) return 'Luar biasa! Kamu juara teka-teki! ✨';
+      if(pct >= 0.8) return 'Keren! Otak encer! 🔥';
+      if(pct >= 0.6) return 'Bagus! Cukup tajam.';
+      if(pct >= 0.4) return 'Lumayan — coba lagi untuk lebih baik!';
+      return 'Wah, coba lagi ya. Latihan bikin jago!';
+    }
+
+    // ---- Confetti (simple particles) ----
+    let confettiCtx, confettiParticles = [], confettiRAF;
+    function initConfetti(){
+      confettiCanvas.width = window.innerWidth; confettiCanvas.height = window.innerHeight;
+      confettiCtx = confettiCanvas.getContext('2d');
+      window.addEventListener('resize', ()=>{ confettiCanvas.width = window.innerWidth; confettiCanvas.height = window.innerHeight; });
+    }
+    function startConfetti(){
+      if(!confettiCtx) initConfetti();
+      for(let i=0;i<200;i++) confettiParticles.push(makeParticle());
+      runConfetti();
+      setTimeout(()=>{ stopConfetti(); },4500);
+    }
+    function stopConfetti(){ if(confettiRAF) cancelAnimationFrame(confettiRAF); confettiParticles = []; if(confettiCtx) confettiCtx.clearRect(0,0,confettiCanvas.width,confettiCanvas.height); }
+    function runConfetti(){
+      confettiRAF = requestAnimationFrame(runConfetti);
+      confettiCtx.clearRect(0,0,confettiCanvas.width,confettiCanvas.height);
+      confettiParticles.forEach(p=>{
+        p.x += p.vx; p.y += p.vy; p.vy += 0.04; p.rotation += p.vr;
+        confettiCtx.save(); confettiCtx.translate(p.x,p.y); confettiCtx.rotate(p.rotation);
+        confettiCtx.fillStyle = p.color; confettiCtx.fillRect(-p.s/2,-p.s/2,p.s,p.s*0.6);
+        confettiCtx.restore();
+      });
+      confettiParticles = confettiParticles.filter(p=> p.y < confettiCanvas.height + 40);
+    }
+    function makeParticle(){
+      const s = Math.random()*10+6; return {
+        x: Math.random()*confettiCanvas.width,
+        y: -20 - Math.random()*50,
+        vx: (Math.random()-0.5)*3,
+        vy: Math.random()*2+1,
+        vr: (Math.random()-0.5)*0.2,
+        rotation: Math.random()*6.28,
+        s,
+        color: ['#ef4444','#f97316','#f59e0b','#10b981','#06b6d4','#7c3aed'][Math.floor(Math.random()*6)]
+      };
+    }
+
+    // Initialize when page loads
+    window.addEventListener('load', ()=>{
+      initConfetti();
+    });
+
+    // Prevent accidental text selection when double-click
+    document.body.addEventListener('mousedown', (e)=> e.preventDefault());
+
+  </script></body>
+</html>
